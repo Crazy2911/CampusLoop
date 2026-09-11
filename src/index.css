@@ -1,0 +1,396 @@
+@import "tailwindcss";
+
+@plugin "daisyui" {
+  themes: light --default, dark;
+}
+
+:root {
+  font-family: Arial, sans-serif;
+  color: #233730;
+  background-color: #f6f8f7;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+:focus-visible {
+  outline: 3px solid #484fc1;
+  outline-offset: 3px;
+}
+/* Smooth feedback without moving the layout */
+.nav-link,
+.board-tab,
+.post-card,
+.post-card a {
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+/* Mouse hover */
+@media (hover: hover) and (pointer: fine) {
+  .nav-link:hover,
+  .board-tab:hover {
+    background-color: #dce8df;
+    color: #233730;
+    box-shadow: inset 0 0 0 1px #a6bcad;
+  }
+
+  .nav-link[aria-current="page"]:hover,
+  .board-tab[aria-pressed="true"]:hover {
+    background-color: #3b6250;
+    color: #ffffff;
+  }
+
+  .post-card:hover {
+    background-color: #fbfdfb;
+    border-color: #6d947e;
+    box-shadow: 0 6px 18px rgb(35 55 48 / 12%);
+  }
+
+  .post-card a:hover {
+    color: #147765;
+    text-decoration: underline;
+    text-underline-offset: 4px;
+  }
+}
+
+/* Keyboard focus */
+.nav-link:focus-visible,
+.board-tab:focus-visible,
+.post-card a:focus-visible {
+  outline: 3px solid #484fc1;
+  outline-offset: 3px;
+}
+
+.post-card:focus-within {
+  border-color: #484fc1;
+  box-shadow: 0 0 0 2px rgb(72 79 193 / 15%);
+}
+
+/* Touch or mouse press: kept after hover to take priority */
+.nav-link:active,
+.board-tab:active {
+  background-color: #1c3329;
+  color: #ffffff;
+  box-shadow: inset 0 0 0 2px #658874;
+}
+
+.post-card a:active {
+  background-color: #dce8df;
+  color: #233730;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-link,
+  .board-tab,
+  .post-card,
+  .post-card a {
+    transition: none;
+  }
+}
+.danger-button {
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .danger-button:not(:disabled):hover {
+    background-color: #fee2e2;
+    border-color: #b91c1c;
+  }
+
+  .danger-solid:not(:disabled):hover {
+    background-color: #991b1b;
+  }
+}
+
+.danger-button:not(:disabled):active {
+  background-color: #fecaca;
+}
+
+.danger-solid:not(:disabled):active {
+  background-color: #7f1d1d;
+}
+
+.danger-button:focus-visible {
+  outline: 3px solid #484fc1;
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .danger-button {
+    transition: none;
+  }
+}
+/* Disabled controls should not appear interactive. */
+.nav-link:disabled,
+.board-tab:disabled {
+  pointer-events: none;
+}
+/* Shared page colors */
+:root {
+  --page-background: #f6f8f7;
+  --page-text: #233730;
+  --theme-surface: #ffffff;
+  --theme-border: #bbcbc1;
+  --theme-hover: #e6ede8;
+  --theme-focus: #484fc1;
+
+  background-color: var(--page-background);
+  color: var(--page-text);
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --page-background: #111b18;
+  --page-text: #edf5ef;
+  --theme-surface: #1b2923;
+  --theme-border: #435b4e;
+  --theme-hover: #2b4337;
+  --theme-focus: #b2aaff;
+
+  /* Match DaisyUI controls to CampusLoop */
+  --color-base-100: #1b2923;
+  --color-base-200: #14211b;
+  --color-base-300: #35483e;
+  --color-base-content: #edf5ef;
+  --color-primary: #65dbad;
+  --color-primary-content: #10251b;
+}
+
+body {
+  background-color: var(--page-background);
+  color: var(--page-text);
+}
+
+/* Theme button */
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  min-height: 44px;
+  flex-shrink: 0;
+  border: 1px solid var(--theme-border);
+  border-radius: 10px;
+  background: var(--theme-surface);
+  color: var(--page-text);
+  cursor: pointer;
+  transition: background-color 160ms ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .theme-toggle:hover {
+    background-color: var(--theme-hover);
+  }
+}
+
+.theme-toggle:active {
+  background-color: var(--theme-hover);
+}
+
+/* Existing fixed-color classes: dark-mode equivalents */
+[data-theme="dark"] [class~="bg-white"] {
+  background-color: #1b2923;
+}
+
+[data-theme="dark"] [class~="bg-[#F6F8F7]"] {
+  background-color: #111b18;
+}
+
+[data-theme="dark"] [class~="bg-[#F3F6F4]"],
+[data-theme="dark"] [class~="bg-[#EDF3EF]"],
+[data-theme="dark"] [class~="bg-[#E9EFEB]"],
+[data-theme="dark"] [class~="bg-[#F0F3F1]"] {
+  background-color: #24372e;
+}
+
+[data-theme="dark"] [class~="bg-[#263F38]"] {
+  background-color: #215841;
+}
+
+/* Main and secondary text */
+[data-theme="dark"] [class~="text-[#233730]"],
+[data-theme="dark"] [class~="text-[#263F38]"] {
+  color: #edf5ef;
+}
+
+[data-theme="dark"] [class~="text-[#596B62]"],
+[data-theme="dark"] [class~="text-[#435E50]"],
+[data-theme="dark"] [class~="text-[#52645A]"] {
+  color: #b4c6ba;
+}
+
+/* Standard borders */
+[data-theme="dark"] [class~="border-[#DEE5E0]"],
+[data-theme="dark"] [class~="border-[#BBCBC1]"],
+[data-theme="dark"] [class~="border-[#263F38]"] {
+  border-color: #435b4e;
+}
+
+/* Fix category */
+[data-theme="dark"] [class~="bg-[#EEEEFC]"] {
+  background-color: #383252;
+}
+
+[data-theme="dark"] [class~="text-[#484FC1]"] {
+  color: #c6bfff;
+}
+
+/* ReUse category and success messages */
+[data-theme="dark"] [class~="bg-[#E7F3EE]"] {
+  background-color: #183e30;
+}
+
+[data-theme="dark"] [class~="text-[#147765]"] {
+  color: #75e0b9;
+}
+
+/* Summary-card accents */
+[data-theme="dark"] [class~="border-t-[#484FC1]"] {
+  border-top-color: #aaa0ff;
+}
+
+[data-theme="dark"] [class~="border-t-[#147765]"] {
+  border-top-color: #65dbad;
+}
+
+[data-theme="dark"] [class~="border-t-[#8A601C]"] {
+  border-top-color: #dfb76f;
+}
+
+[data-theme="dark"] [class~="text-[#8A601C]"] {
+  color: #e9c785;
+}
+
+/* Warning messages */
+[data-theme="dark"] [class~="bg-amber-50"],
+[data-theme="dark"] [class~="bg-[#FFF7E6]"] {
+  background-color: #352b18;
+}
+
+[data-theme="dark"] [class~="text-amber-900"],
+[data-theme="dark"] [class~="text-[#76541D]"] {
+  color: #f2d49a;
+}
+
+[data-theme="dark"] [class~="border-amber-200"],
+[data-theme="dark"] [class~="border-[#E6CB91]"] {
+  border-color: #806333;
+}
+
+/* Error messages and deletion confirmation */
+[data-theme="dark"] [class~="bg-red-50"] {
+  background-color: #3a2026;
+}
+
+[data-theme="dark"] [class~="text-red-700"],
+[data-theme="dark"] [class~="text-red-800"],
+[data-theme="dark"] [class~="text-red-900"] {
+  color: #ffb4bf;
+}
+
+[data-theme="dark"] [class~="border-red-200"],
+[data-theme="dark"] [class~="border-red-300"] {
+  border-color: #915563;
+}
+
+/* Native inputs and placeholders */
+[data-theme="dark"] input,
+[data-theme="dark"] select,
+[data-theme="dark"] textarea {
+  color-scheme: dark;
+  color: #edf5ef;
+}
+
+[data-theme="dark"] input::placeholder,
+[data-theme="dark"] textarea::placeholder {
+  color: #a2b7aa;
+  opacity: 1;
+}
+
+/* Dark-mode mouse feedback */
+@media (hover: hover) and (pointer: fine) {
+  [data-theme="dark"] .nav-link:not(:disabled):hover,
+  [data-theme="dark"] .board-tab:not(:disabled):hover {
+    background-color: #304e3e;
+    color: #ffffff;
+    box-shadow: inset 0 0 0 1px #729781;
+  }
+
+  [data-theme="dark"] .nav-link[aria-current="page"]:hover,
+  [data-theme="dark"] .board-tab[aria-pressed="true"]:hover {
+    background-color: #2d7054;
+  }
+
+  [data-theme="dark"] .post-card:hover {
+    background-color: #21352b;
+    border-color: #729781;
+    box-shadow: 0 6px 18px rgb(0 0 0 / 20%);
+  }
+
+  [data-theme="dark"] .post-card a:hover {
+    color: #8debc7;
+  }
+
+  [data-theme="dark"] .danger-button:not(:disabled):hover {
+    background-color: #582b36;
+    border-color: #d77b8a;
+  }
+
+  [data-theme="dark"] .danger-solid:not(:disabled):hover {
+    background-color: #991b1b;
+  }
+}
+
+/* Dark-mode touch feedback */
+[data-theme="dark"] .nav-link:not(:disabled):active,
+[data-theme="dark"] .board-tab:not(:disabled):active {
+  background-color: #386a50;
+  color: #ffffff;
+}
+
+[data-theme="dark"] .post-card a:active {
+  background-color: #304e3e;
+  color: #ffffff;
+}
+
+[data-theme="dark"] .danger-button:not(:disabled):active {
+  background-color: #68313d;
+}
+
+[data-theme="dark"] .danger-solid:not(:disabled):active {
+  background-color: #7f1d1d;
+}
+
+/* Focus remains visible in both themes */
+:root :focus-visible {
+  outline: 3px solid var(--theme-focus);
+  outline-offset: 3px;
+}
+
+[data-theme="dark"] .post-card:focus-within {
+  border-color: #b2aaff;
+  box-shadow: 0 0 0 2px rgb(178 170 255 / 20%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .theme-toggle {
+    transition: none;
+  }
+}
