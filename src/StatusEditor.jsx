@@ -1,9 +1,8 @@
 import { useState, useRef } from 'react'
 
-const API_URL =
-  'https://6aa2d6b4ccb3db9689a7127d.mockapi.io/posts'
+import { supabase } from './supabaseClient'
 
-function StatusEditor({ post, onUpdated }) {
+function StatusEditor({ post, user, isAuthority, onUpdated }) {
   const [selectedStatus, setSelectedStatus] = useState(post.status)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -17,11 +16,22 @@ function StatusEditor({ post, onUpdated }) {
       : ['Available', 'Reserved', 'Collected']
 
   const hasChanged = selectedStatus !== post.status
+  const canChangeStatus = Boolean(
+  user && (
+    post.type === 'fix'
+      ? isAuthority
+      : user.id === post.owner_id
+  )
+)
 
   async function handleSubmit(event) {
     event.preventDefault()
 
     if (submitting.current || !hasChanged) return
+    if (!supabase || !canChangeStatus) {
+  setError('You do not have permission to change this status.')
+  return
+}
 
     if (!statuses.includes(selectedStatus)) {
       setError('Choose a valid status.')
@@ -40,46 +50,32 @@ function StatusEditor({ post, onUpdated }) {
     }, 12000)
 
     try {
-      const response = await fetch(
-        `${API_URL}/${encodeURIComponent(post.id)}`,
-        {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          signal: controller.signal,
-          body: JSON.stringify({
-            status: selectedStatus,
-          }),
-        }
-      )
+      const { data: savedPost, error: updateError } = await supabase
+  .from('posts')
+  .update({ status: selectedStatus })
+  .eq('id', post.id)
+  .select()
+  .single()
+  .abortSignal(controller.signal)
 
-      if (!response.ok) {
-        throw new Error(
-          response.status === 404
-            ? 'This post no longer exists. Refresh the board.'
-            : `The server returned ${response.status}.`
-        )
-      }
+if (updateError) {
+  throw new Error(
+    updateError.code === 'PGRST116'
+      ? 'The status was not updated. The post may be removed, or your permission may have changed.'
+      : updateError.message
+  )
+}
 
-      const savedPost = await response.json()
+if (
+  !savedPost ||
+  savedPost.id !== post.id ||
+  savedPost.status !== selectedStatus
+) {
+  throw new Error('The server did not confirm the requested status.')
+}
 
-      if (
-        !savedPost ||
-        String(savedPost.id) !== String(post.id) ||
-        savedPost.status !== selectedStatus
-      ) {
-        throw new Error(
-          'The server did not confirm the requested status.'
-        )
-      }
-
-      onUpdated({
-        ...post,
-        status: savedPost.status,
-      })
-
-      setSuccess('Status updated.')
+onUpdated(savedPost)
+setSuccess('Status updated.')
     } catch (err) {
       setError(
         err.name === 'AbortError'
@@ -116,7 +112,7 @@ function StatusEditor({ post, onUpdated }) {
         <select
           id="post-status"
           value={selectedStatus}
-          disabled={saving}
+          disabled={saving || !canChangeStatus}
           onChange={(event) => {
             setSelectedStatus(event.target.value)
             setError('')
@@ -133,7 +129,7 @@ function StatusEditor({ post, onUpdated }) {
 
         <button
           type="submit"
-          disabled={saving || !hasChanged}
+          disabled={saving || !hasChanged || !canChangeStatus}
           className="nav-link flex min-h-11 items-center justify-center gap-2 rounded-lg bg-[#263F38] px-4 py-2 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
         >
           {saving && (
