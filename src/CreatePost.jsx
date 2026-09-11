@@ -1,11 +1,9 @@
+import { supabase } from './supabaseClient'
 import ImagePicker from './ImagePicker'
 import { useState, useEffect, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 
-const API_URL =
-  'https://6aa2d6b4ccb3db9689a7127d.mockapi.io/posts'
 
-const DRAFT_KEY = 'campusloop-post-draft'
 
 const categories = {
   fix: ['Electrical', 'Plumbing', 'Furniture'],
@@ -22,10 +20,9 @@ const emptyForm = {
   imagePath: '',
 }
 
-function readDraft() {
+function readDraft(draftKey) {
   try {
-    const saved = JSON.parse(localStorage.getItem(DRAFT_KEY))
-
+    const saved = JSON.parse(localStorage.getItem(draftKey))
     if (!saved || typeof saved !== 'object') {
       return { ...emptyForm }
     }
@@ -59,10 +56,11 @@ imagePath:
   }
 }
 
-function CreatePost({ onCreated }) {
+function CreatePost({ onCreated, user }) {
   const navigate = useNavigate()
+  const DRAFT_KEY = `campusloop-post-draft:${user.id}`
 
-  const [form, setForm] = useState(readDraft)
+  const [form, setForm] = useState(() => readDraft(DRAFT_KEY))
   const [errors, setErrors] = useState({})
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
@@ -94,7 +92,7 @@ function handleImageChange(image) {
         'Draft saving is unavailable. Keep this page open until you submit.'
       )
     }
-  }, [form])
+  }, [form,DRAFT_KEY])
 
   function handleChange(event) {
     const { name, value } = event.target
@@ -171,43 +169,37 @@ function handleImageChange(image) {
     }, 12000)
 
     try {
-      const response = await fetch(API_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        signal: controller.signal,
-        body: JSON.stringify({
-          ...cleanedForm,
-          status: cleanedForm.type === 'fix'
-            ? 'Reported'
-            : 'Available',
-        }),
-      })
+      if (!supabase || !user?.id) {
+  throw new Error('Please sign in before creating a post.')
+}
 
-      if (!response.ok) {
-        throw new Error(
-          `The server returned ${response.status}.`
-        )
-      }
+const { data: createdPost, error: insertError } = await supabase
+  .from('posts')
+  .insert({
+    owner_id: user.id,
+    type: cleanedForm.type,
+    title: cleanedForm.title,
+    description: cleanedForm.description,
+    location: cleanedForm.location,
+    category: cleanedForm.category,
+    imageUrl: cleanedForm.imageUrl,
+    imagePath: cleanedForm.imagePath,
+    status: cleanedForm.type === 'fix'
+      ? 'Reported'
+      : 'Available',
+  })
+  .select()
+  .single()
+  .abortSignal(controller.signal)
 
-      const savedPost = await response.json()
+if (insertError) {
+  throw insertError
+}
 
-      if (
-        !savedPost ||
-        !['string', 'number'].includes(typeof savedPost.id)
-      ) {
-        throw new Error('The server did not return a valid post ID.')
-      }
-
-      // Use validated form values and the server-generated ID.
-      const createdPost = {
-        ...cleanedForm,
-        id: String(savedPost.id),
-        status: cleanedForm.type === 'fix'
-          ? 'Reported'
-          : 'Available',
-      }
+if (!createdPost || typeof createdPost.id !== 'string') {
+  throw new Error('The server did not return a valid post.')
+}
+      
 
       try {
         localStorage.removeItem(DRAFT_KEY)
@@ -376,6 +368,7 @@ function handleImageChange(image) {
             </p>
           </div>
           <ImagePicker
+  user={user}
   imageUrl={form.imageUrl}
   onImageChange={handleImageChange}
   onBusyChange={handleImageBusy}

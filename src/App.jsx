@@ -1,16 +1,143 @@
 import { useState, useEffect } from 'react'
-import { Routes, Route, Link} from 'react-router-dom'
+import {
+  Routes,
+  Route,
+  Link,
+  Navigate,
+  useLocation,
+} from 'react-router-dom'
+
+import AuthPage from './AuthPage'
+import { supabase } from './supabaseClient'
 import Header from './Header'
 import Posts from './Posts'
 import CreatePost from './CreatePost'
 import PostDetails from './PostDetails'
 
-const API_URL =
-  'https://6aa2d6b4ccb3db9689a7127d.mockapi.io/posts'
-
 
 
 function App() {
+  const location = useLocation()
+
+const [session, setSession] = useState(null)
+const [authLoading, setAuthLoading] = useState(true)
+const [authError, setAuthError] = useState('')
+
+useEffect(() => {
+  if (!supabase) {
+    setAuthError('Authentication is not configured.')
+    setAuthLoading(false)
+    return
+  }
+
+  let active = true
+  let receivedAuthEvent = false
+
+  const { data: { subscription } } =
+    supabase.auth.onAuthStateChange((_event, nextSession) => {
+      if (!active) return
+
+      receivedAuthEvent = true
+      setSession(nextSession)
+      setAuthLoading(false)
+      setAuthError('')
+    })
+
+  async function restoreSession() {
+    try {
+      const { data, error } = await supabase.auth.getSession()
+
+      if (!active || receivedAuthEvent) return
+      if (error) throw error
+
+      setSession(data.session)
+    } catch {
+      if (active && !receivedAuthEvent) {
+        setAuthError(
+          'Could not restore your login. Try refreshing the page.'
+        )
+      }
+    } finally {
+      if (active) setAuthLoading(false)
+    }
+  }
+
+  restoreSession()
+
+  return () => {
+    active = false
+    subscription.unsubscribe()
+  }
+}, [])
+
+const user = session?.user ?? null
+const userId = user?.id ?? null
+
+const [authorityResult, setAuthorityResult] = useState(null)
+const [authorityRetry, setAuthorityRetry] = useState(0)
+
+useEffect(() => {
+  if (!supabase || !userId) {
+    setAuthorityResult(null)
+    return
+  }
+
+  let active = true
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 12000)
+
+  setAuthorityResult(null)
+
+  async function checkAuthority() {
+    try {
+      const { data, error } = await supabase
+        .from('campus_authorities')
+        .select('user_id')
+        .eq('user_id', userId)
+        .maybeSingle()
+        .abortSignal(controller.signal)
+
+      if (error) throw error
+
+      if (active) {
+        setAuthorityResult({
+          userId,
+          allowed: Boolean(data),
+          error: '',
+        })
+      }
+    } catch {
+      if (active) {
+        setAuthorityResult({
+          userId,
+          allowed: false,
+          error: 'Could not check authority access.',
+        })
+      }
+    } finally {
+      clearTimeout(timeoutId)
+    }
+  }
+
+  checkAuthority()
+
+  return () => {
+    active = false
+    clearTimeout(timeoutId)
+    controller.abort()
+  }
+}, [userId, authorityRetry])
+
+const isAuthority = Boolean(
+  userId &&
+  authorityResult?.userId === userId &&
+  authorityResult.allowed
+)
+
+const authorityError =
+  userId && authorityResult?.userId === userId
+    ? authorityResult.error
+    : ''
   const [posts, setPosts] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -58,18 +185,20 @@ function handlePostUpdated(updatedPost) {
       setError('')
 
       try {
-        const response = await fetch(API_URL, {
-          signal: controller.signal,
-          cache: 'no-store',
-        })
+        if (!supabase) {
+  throw new Error('Supabase is not configured.')
+}
 
-        if (!response.ok) {
-          throw new Error(
-            `Could not load posts. Server returned ${response.status}.`
-          )
-        }
+const { data, error: fetchError } = await supabase
+  .from('posts')
+  .select('*')
+  .order('created_at', { ascending: false })
+  .abortSignal(controller.signal)
 
-        const data = await response.json()
+if (fetchError) {
+  throw fetchError
+}
+
 
         if (!Array.isArray(data)) {
           throw new Error('The API did not return a list of posts.')
@@ -95,7 +224,7 @@ function handlePostUpdated(updatedPost) {
 
         if (!validData) {
           throw new Error(
-            'Some posts have invalid fields. Check the MockAPI records.'
+            'Some posts have invalid fields. Check the Supabase records.'
           )
         }
 
@@ -138,10 +267,46 @@ function handlePostUpdated(updatedPost) {
 
   return (
     <>
-      <Header />
+      <Header
+  user={user}
+  authLoading={authLoading}
+  isAuthority={isAuthority}
+/>
 
       <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
-        {loading ? (
+        {authorityError && (
+  <div
+    role="alert"
+    className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800"
+  >
+    <p>{authorityError}</p>
+
+    <button
+      type="button"
+      onClick={() => setAuthorityRetry((count) => count + 1)}
+      className="mt-2 min-h-11 px-3 font-semibold underline"
+    >
+      Retry access check
+    </button>
+  </div>
+)}
+  {authError && (
+    <p
+      role="alert"
+      className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800"
+    >
+      {authError}
+    </p>
+  )}
+        {location.pathname === '/auth' ? (
+  authLoading ? (
+    <p role="status">Checking your session…</p>
+  ) : user ? (
+    <Navigate to="/" replace />
+  ) : (
+    <AuthPage />
+  )
+) : loading ? (
           <div
             role="status"
             className="flex items-center gap-3 rounded-xl border border-[#DEE5E0] bg-white p-6"
@@ -178,13 +343,28 @@ function handlePostUpdated(updatedPost) {
           </div>
         ) : (
           <Routes>
+            <Route
+  path="/auth"
+  element={
+    authLoading ? (
+      <p role="status">Checking your session…</p>
+    ) : user ? (
+      <Navigate to="/" replace />
+    ) : (
+      <AuthPage />
+    )
+  }
+/>
             <Route path="/" element={<Posts posts={posts} />} />
 
           <Route
   path="/posts/:id"
   element={
     <PostDetails
+      key={`${userId ?? 'visitor'}:${location.pathname}`}
       posts={posts}
+      user={authLoading ? null : user}
+      isAuthority={!authLoading && isAuthority}
       onDeleted={handlePostDeleted}
       onUpdated={handlePostUpdated}
     />
@@ -193,7 +373,19 @@ function handlePostUpdated(updatedPost) {
 
             <Route
   path="/create"
-  element={<CreatePost onCreated={handlePostCreated} />}
+  element={
+    authLoading ? (
+      <p role="status">Checking your session…</p>
+    ) : user ? (
+      <CreatePost
+        key={user.id}
+        user={user}
+        onCreated={handlePostCreated}
+      />
+    ) : (
+      <Navigate to="/auth" replace />
+    )
+  }
 />
 
             <Route

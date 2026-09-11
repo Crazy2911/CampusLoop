@@ -13,6 +13,7 @@ function ImagePicker({
   onImageChange,
   onBusyChange,
   disabled,
+  user,
 }) {
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState('')
@@ -48,6 +49,10 @@ function ImagePicker({
       )
       return
     }
+    if (!user?.id) {
+  setError('Please sign in before uploading a photo.')
+  return
+}
 
     uploadingRef.current = true
     setUploading(true)
@@ -55,7 +60,7 @@ function ImagePicker({
 
     try {
       const extension = fileTypes[file.type]
-      const path = `posts/${crypto.randomUUID()}.${extension}`
+const path = `posts/${user.id}/${crypto.randomUUID()}.${extension}`
 
       const { error: uploadError } = await supabase.storage
         .from('campus-images')
@@ -111,16 +116,16 @@ function ImagePicker({
       </label>
 
       <p id="photo-hint" className="mt-1 text-sm text-[#596B62]">
-        JPEG, PNG, or WebP, up to 2 MB. Selecting a photo uploads
-        it to public demo storage.
-      </p>
+  JPEG, PNG, or WebP, up to 2 MB. Uploaded photos are publicly
+  viewable. Avoid including private information.
+</p>
 
       <input
         ref={inputRef}
         id="post-photo"
         type="file"
         accept="image/jpeg,image/png,image/webp"
-        disabled={disabled || uploading}
+        disabled={disabled || uploading || !user?.id}
         onChange={handleFileChange}
         aria-describedby="photo-hint photo-feedback"
         className="file-input mt-3 w-full min-w-0 border-[#BBCBC1] bg-white text-sm"

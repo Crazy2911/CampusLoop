@@ -1,9 +1,8 @@
 import { useState, useRef } from 'react'
 
-const API_URL =
-  'https://6aa2d6b4ccb3db9689a7127d.mockapi.io/posts'
+import { supabase } from './supabaseClient'
 
-function EditPost({ post, onUpdated, onClose }) {
+function EditPost({ post,user , onUpdated, onClose }) {
   const [form, setForm] = useState({
     title: post.title,
     description: post.description,
@@ -40,6 +39,10 @@ function EditPost({ post, onUpdated, onClose }) {
     event.preventDefault()
 
     if (submitting.current) return
+    if (!supabase || !user || user.id !== post.owner_id) {
+  setSaveError('Only the post owner can edit this post.')
+  return
+}
 
     const cleaned = {
       title: form.title.trim(),
@@ -81,45 +84,36 @@ function EditPost({ post, onUpdated, onClose }) {
     }, 12000)
 
     try {
-      const response = await fetch(
-        `${API_URL}/${encodeURIComponent(post.id)}`,
-        {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          signal: controller.signal,
-          body: JSON.stringify(cleaned),
-        }
-      )
+      const { data: savedPost, error: updateError } = await supabase
+  .from('posts')
+  .update(cleaned)
+  .eq('id', post.id)
+  .eq('owner_id', user.id)
+  .select()
+  .single()
+  .abortSignal(controller.signal)
 
-      if (!response.ok) {
-        throw new Error(
-          response.status === 404
-            ? 'This post no longer exists. Return to the board.'
-            : `The server returned ${response.status}.`
-        )
-      }
+if (updateError) {
+  throw new Error(
+    updateError.code === 'PGRST116'
+      ? 'The post was not updated. It may be removed, or you may no longer have permission.'
+      : updateError.message
+  )
+}
 
-      const savedPost = await response.json()
+const confirmed =
+  savedPost &&
+  savedPost.id === post.id &&
+  Object.keys(cleaned).every(
+    (field) => savedPost[field] === cleaned[field]
+  )
 
-      const confirmed =
-        savedPost &&
-        String(savedPost.id) === String(post.id) &&
-        Object.keys(cleaned).every(
-          (field) => savedPost[field] === cleaned[field]
-        )
+if (!confirmed) {
+  throw new Error('The server did not confirm your changes.')
+}
 
-      if (!confirmed) {
-        throw new Error('The server did not confirm your changes.')
-      }
-
-      onUpdated({
-        ...post,
-        ...cleaned,
-      })
-
-      onClose()
+onUpdated(savedPost)
+onClose()
     } catch (error) {
       setSaveError(
         error.name === 'AbortError'

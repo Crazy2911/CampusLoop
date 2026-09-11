@@ -3,11 +3,15 @@ import EditPost from './EditPost'
 import StatusEditor from './StatusEditor'
 import { useState, useRef } from 'react'
 import { Link, useParams, useNavigate } from 'react-router-dom'
+import { supabase } from './supabaseClient'
 
-const API_URL =
-  'https://6aa2d6b4ccb3db9689a7127d.mockapi.io/posts'
-
-function PostDetails({ posts, onDeleted,onUpdated }) {
+function PostDetails({
+  posts,
+  user,
+  isAuthority,
+  onDeleted,
+  onUpdated,
+}) {
   const { id } = useParams()
   const navigate = useNavigate()
 
@@ -15,37 +19,53 @@ function PostDetails({ posts, onDeleted,onUpdated }) {
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState('')
   const [editing, setEditing] = useState(false)
-
   const submitting = useRef(false)
 
-  const post = posts.find((post) => String(post.id) === id)
+  const post = posts.find((item) => String(item.id) === id)
+
+  const isOwner = Boolean(
+    user && post && user.id === post.owner_id
+  )
+
+  const canChangeStatus = Boolean(
+    user && post && (
+      post.type === 'fix' ? isAuthority : isOwner
+    )
+  )
 
   async function handleDelete() {
-    if (!post || submitting.current) return
+    if (!post || !isOwner || submitting.current) return
 
     submitting.current = true
     setDeleting(true)
     setDeleteError('')
 
     const controller = new AbortController()
+    let timedOut = false
 
     const timeoutId = setTimeout(() => {
+      timedOut = true
       controller.abort()
     }, 12000)
 
     try {
-      const response = await fetch(
-        `${API_URL}/${encodeURIComponent(post.id)}`,
-        {
-          method: 'DELETE',
-          signal: controller.signal,
-        }
-      )
+      if (!supabase) {
+        throw new Error('Supabase is not configured.')
+      }
 
-      // A 404 means the post is already absent from the server.
-      if (!response.ok && response.status !== 404) {
+      const { data, error } = await supabase
+        .from('posts')
+        .delete()
+        .eq('id', post.id)
+        .eq('owner_id', user.id)
+        .select('id')
+        .abortSignal(controller.signal)
+
+      if (error) throw error
+
+      if (!data || data.length !== 1 || data[0].id !== post.id) {
         throw new Error(
-          `The server returned ${response.status}.`
+          'No deletion was confirmed. The post may already be removed, or your account may not have permission. Refresh the board.'
         )
       }
 
@@ -53,9 +73,9 @@ function PostDetails({ posts, onDeleted,onUpdated }) {
       navigate('/', { replace: true })
     } catch (error) {
       setDeleteError(
-        error.name === 'AbortError'
-          ? 'Deletion was not confirmed before the request timed out. You can retry; this targets the same post.'
-          : 'Could not confirm deletion. Check your connection and retry.'
+        timedOut
+          ? 'Deletion was not confirmed before the timeout. Refresh the board before retrying.'
+          : error.message || 'Could not confirm deletion. Please retry.'
       )
     } finally {
       clearTimeout(timeoutId)
@@ -67,17 +87,13 @@ function PostDetails({ posts, onDeleted,onUpdated }) {
   if (!post) {
     return (
       <section>
-        <h1 className="text-2xl font-bold">
-          Post not found
-        </h1>
-
+        <h1 className="text-2xl font-bold">Post not found</h1>
         <p className="mt-2 text-[#596B62]">
           It may have been removed.
         </p>
-
         <Link
           to="/"
-          className="mt-4 inline-flex min-h-11 items-center rounded-md text-[#147765] underline"
+          className="mt-4 inline-flex min-h-11 items-center text-[#147765] underline"
         >
           Return to campus board
         </Link>
@@ -111,21 +127,28 @@ function PostDetails({ posts, onDeleted,onUpdated }) {
           <span className="rounded-full bg-[#F0F3F1] px-3 py-1 text-sm text-[#52645A]">
             {post.status}
           </span>
+
+          {isOwner && (
+            <span className="text-sm font-semibold">
+              Your post
+            </span>
+          )}
         </div>
 
-        <h1 className="mt-4 text-2xl font-bold break-words">
+        <h1 className="mt-4 break-words text-2xl font-bold">
           {post.title}
         </h1>
-        <PostImage
-  src={post.imageUrl}
-  alt={`Attached photo: ${post.title}`}
-/>
 
-        <p className="mt-4 whitespace-pre-wrap leading-relaxed break-words text-[#596B62]">
+        <PostImage
+          src={post.imageUrl}
+          alt={`Attached photo: ${post.title}`}
+        />
+
+        <p className="mt-4 whitespace-pre-wrap break-words leading-relaxed text-[#596B62]">
           {post.description}
         </p>
 
-        <p className="mt-5 text-sm break-words">
+        <p className="mt-5 break-words text-sm">
           <strong>Location:</strong> {post.location}
         </p>
 
@@ -133,112 +156,118 @@ function PostDetails({ posts, onDeleted,onUpdated }) {
           <strong>Category:</strong> {post.category}
         </p>
 
-        <section
-          aria-labelledby="manage-heading"
-          className="mt-6 border-t border-[#DEE5E0] pt-5"
-        >
-          <h2 id="manage-heading" className="font-semibold">
-            Demo management
-          </h2>
-
-          <p className="mt-2 text-sm leading-relaxed text-[#596B62]">
-            This prototype has no accounts. These controls are
-            available to anyone using the demo.
+        {isFix && (
+          <p className="mt-4 text-sm text-[#596B62]">
+            Maintenance status is managed by campus authorities.
           </p>
-          {editing ? (
-  <EditPost
-    key={post.id}
-    post={post}
-    onUpdated={onUpdated}
-    onClose={() => setEditing(false)}
-  />
-) : (
-  !confirmDelete && (
-    <>
-      <button
-        type="button"
-        onClick={() => setEditing(true)}
-        className="nav-link mt-4 min-h-11 rounded-lg border border-[#BBCBC1] bg-white px-4 py-2 font-semibold text-[#263F38]"
-      >
-        Edit post
-      </button>
+        )}
 
-      <StatusEditor
-        key={post.id}
-        post={post}
-        onUpdated={onUpdated}
-      />
-    </>
-  )
-)}
+        {(isOwner || canChangeStatus) && (
+          <section
+            aria-labelledby="manage-heading"
+            className="mt-6 border-t border-[#DEE5E0] pt-5"
+          >
+            <h2 id="manage-heading" className="font-semibold">
+              Manage post
+            </h2>
 
-          {!confirmDelete ? (
-            <button
-              type="button"
-              disabled={editing}
-title={editing ? 'Finish or cancel editing first' : undefined}
-              onClick={() => {
-                setDeleteError('')
-                setConfirmDelete(true)
-              }}
-              className="danger-button mt-4 min-h-11 rounded-lg border border-red-300 bg-white px-4 py-2 font-semibold text-red-800"
-            >
-              Delete post
-            </button>
-          ) : (
-            <div
-              className="mt-4 rounded-lg border border-red-200 bg-red-50 p-4"
-              aria-busy={deleting}
-            >
-              <p role="status" className="font-semibold text-red-900">
-                Delete this post permanently?
-              </p>
-
-              <p className="mt-1 text-sm text-red-800">
-                This action cannot be undone.
-              </p>
-
-              <div className="mt-4 flex flex-col gap-3 sm:flex-row">
-                <button
-                  type="button"
-                  onClick={handleDelete}
-                  disabled={deleting}
-                  className="danger-button danger-solid flex min-h-11 items-center justify-center gap-2 rounded-lg bg-red-700 px-4 py-2 font-semibold text-white disabled:cursor-wait disabled:opacity-60"
-                >
-                  {deleting && (
-                    <span
-                      aria-hidden="true"
-                      className="loading loading-spinner loading-sm"
-                    />
+            {editing && isOwner ? (
+              <EditPost
+                key={post.id}
+                post={post}
+                user={user}
+                onUpdated={onUpdated}
+                onClose={() => setEditing(false)}
+              />
+            ) : (
+              !confirmDelete && (
+                <>
+                  {isOwner && (
+                    <button
+                      type="button"
+                      onClick={() => setEditing(true)}
+                      className="nav-link mt-4 min-h-11 rounded-lg border border-[#BBCBC1] bg-white px-4 py-2 font-semibold text-[#263F38]"
+                    >
+                      Edit post
+                    </button>
                   )}
 
-                  {deleting ? 'Deleting…' : 'Yes, delete post'}
-                </button>
+                  {canChangeStatus && (
+                    <StatusEditor
+                      key={post.id}
+                      post={post}
+                      user={user}
+                      isAuthority={isAuthority}
+                      onUpdated={onUpdated}
+                    />
+                  )}
+                </>
+              )
+            )}
 
+            {isOwner && (
+              !confirmDelete ? (
                 <button
                   type="button"
-                  disabled={deleting}
+                  disabled={editing}
+                  title={editing ? 'Finish or cancel editing first' : undefined}
                   onClick={() => {
-                    setConfirmDelete(false)
                     setDeleteError('')
+                    setConfirmDelete(true)
                   }}
-                  className="nav-link min-h-11 rounded-lg border border-[#BBCBC1] bg-white px-4 py-2 font-semibold text-[#263F38] disabled:opacity-60"
+                  className="danger-button mt-4 min-h-11 rounded-lg border border-red-300 bg-white px-4 py-2 font-semibold text-red-800 disabled:opacity-50"
                 >
-                  Keep post
+                  Delete post
                 </button>
-              </div>
-
-              {deleteError && (
-                <p
-                  role="alert"
-                  className="mt-4 text-sm leading-relaxed text-red-800"
+              ) : (
+                <div
+                  aria-busy={deleting}
+                  className="mt-4 rounded-lg border border-red-200 bg-red-50 p-4"
                 >
-                  {deleteError}
-                </p>
-              )}
-            </div>
-          )}
-        </section>
+                  <p role="status" className="font-semibold text-red-900">
+                    Delete this post permanently?
+                  </p>
+
+                  <p className="mt-1 text-sm text-red-800">
+                    This action cannot be undone.
+                  </p>
+
+                  <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+                    <button
+                      type="button"
+                      onClick={handleDelete}
+                      disabled={deleting}
+                      className="danger-button danger-solid min-h-11 rounded-lg bg-red-700 px-4 py-2 font-semibold text-white disabled:opacity-60"
+                    >
+                      {deleting ? 'Deleting…' : 'Yes, delete post'}
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={deleting}
+                      onClick={() => {
+                        setConfirmDelete(false)
+                        setDeleteError('')
+                      }}
+                      className="nav-link min-h-11 rounded-lg border border-[#BBCBC1] bg-white px-4 py-2 font-semibold text-[#263F38] disabled:opacity-60"
+                    >
+                      Keep post
+                    </button>
+                  </div>
+
+                  {deleteError && (
+                    <p
+                      role="alert"
+                      className="mt-4 text-sm leading-relaxed text-red-800"
+                    >
+                      {deleteError}
+                    </p>
+                  )}
+                </div>
+              )
+            )}
+          </section>
+        )}
       </article>
     </section>
   )

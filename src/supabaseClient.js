@@ -39,10 +39,10 @@ export const supabase =
   supabaseUrl && supabaseKey
     ? createClient(supabaseUrl, supabaseKey, {
         auth: {
-          persistSession: false,
-          autoRefreshToken: false,
-          detectSessionInUrl: false,
-        },
+  persistSession: true,
+  autoRefreshToken: true,
+  detectSessionInUrl: true,
+},
         global: {
           fetch: fetchWithTimeout,
         },
